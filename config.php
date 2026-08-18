@@ -2,21 +2,43 @@
 /**
  * config.php — database credentials & app constants.
  *
- * Kept separate from db.php so connection details live in one place and can be
- * swapped per machine without touching the connection logic. These are the
- * stock XAMPP defaults (root / no password). Change them if your MySQL differs.
+ * Values come from ENVIRONMENT VARIABLES when present (production: Railway, RDS,
+ * etc. inject them), and fall back to the stock XAMPP defaults for local dev
+ * (root / no password / db "timedeo"). This keeps real secrets OUT of the repo:
+ * commit config.example.php, set the real values in your host's env vars, and
+ * (recommended) add config.php to .gitignore if you ever hardcode anything here.
+ *
+ * Env vars read:
+ *   DB_HOST  DB_PORT  DB_NAME  DB_USER  DB_PASS   — database connection
+ *   CORS_ORIGIN                                   — allowed browser origin
+ *   APP_DEBUG                                     — "1" to include error detail
+ *
+ * Note: Railway's MySQL plugin exposes MYSQLHOST / MYSQLUSER / MYSQLPASSWORD /
+ * MYSQLDATABASE / MYSQLPORT — map those onto DB_* in the service's Variables
+ * (e.g. DB_HOST = ${{MySQL.MYSQLHOST}}), or rename the reads below to match.
  */
+
+$env = static function (string $key, ?string $default = null): ?string {
+    $v = getenv($key);
+    return ($v === false || $v === '') ? $default : $v;
+};
 
 return [
     'db' => [
-        'host'    => '127.0.0.1',
-        'port'    => 3306,
-        'name'    => 'timedeo',
-        'user'    => 'root',
-        'pass'    => '',
+        'host'    => $env('DB_HOST', '127.0.0.1'),
+        'port'    => (int) $env('DB_PORT', '3306'),
+        'name'    => $env('DB_NAME', 'timedeo'),
+        'user'    => $env('DB_USER', 'root'),
+        'pass'    => $env('DB_PASS', ''),
         'charset' => 'utf8mb4',
     ],
-    // Where the React dev server runs. '*' keeps CORS simple for local lab work;
-    // tighten to 'http://localhost:5173' if you prefer an explicit origin.
-    'cors_allow_origin' => '*',
+    // Browser origin allowed to call this API. '*' is fine for local dev and for
+    // a same-origin setup (Vercel rewrite / reverse proxy). For a DIRECT
+    // cross-origin call from Vercel, set CORS_ORIGIN to your exact frontend URL
+    // (e.g. https://your-app.vercel.app) — '*' is invalid once cookies are used.
+    'cors_allow_origin' => $env('CORS_ORIGIN', '*'),
+
+    // When '1', json_error() includes the raw exception message in `detail`.
+    // Keep this OFF (unset / '0') in production so internals never leak.
+    'debug' => $env('APP_DEBUG', '0') === '1',
 ];

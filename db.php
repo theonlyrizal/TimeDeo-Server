@@ -89,10 +89,14 @@ function json_ok($data = [], int $status = 200): void
  */
 function json_error(string $message, int $status = 400, ?string $detail = null): void
 {
+    global $__config;
     http_response_code($status);
     $body = ['success' => false, 'error' => $message];
-    if ($detail !== null) {
-        $body['detail'] = $detail; // handy in the lab; drop for real deployments
+    // Only surface internal detail when APP_DEBUG=1 (off in production), so raw
+    // DB / exception messages never leak to clients. Set APP_DEBUG=1 locally to
+    // see them while developing.
+    if ($detail !== null && !empty($__config['debug'])) {
+        $body['detail'] = $detail;
     }
     echo json_encode($body, JSON_UNESCAPED_UNICODE);
     exit;
