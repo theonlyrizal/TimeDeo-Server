@@ -22,7 +22,21 @@ declare(strict_types=1);
  * ------------------------------------------------------------------------- */
 $__config = require __DIR__ . '/config.php';
 
-header('Access-Control-Allow-Origin: ' . $__config['cors_allow_origin']);
+// A credentialed cross-origin request (fetch with credentials:'include') MUST be
+// answered with an exact origin — never '*' — plus Allow-Credentials: true, or
+// the browser discards the response. We reflect the caller's Origin when it's in
+// the configured allow-list (comma-separated). '*' in the list means "reflect any
+// origin" (convenient for dev; lock it to your real origin in production).
+$__allowed = array_map('trim', explode(',', (string) ($__config['cors_allow_origin'] ?? '')));
+$__origin  = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($__origin !== '' && (in_array('*', $__allowed, true) || in_array($__origin, $__allowed, true))) {
+    header('Access-Control-Allow-Origin: ' . $__origin);
+    header('Access-Control-Allow-Credentials: true');
+    header('Vary: Origin'); // response varies by origin — don't let caches cross it
+} else {
+    // No/unknown Origin (e.g. curl, same-origin) — send the configured value as-is.
+    header('Access-Control-Allow-Origin: ' . $__config['cors_allow_origin']);
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json; charset=utf-8');

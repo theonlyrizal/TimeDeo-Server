@@ -32,11 +32,13 @@ return [
         'pass'    => $env('DB_PASS', ''),
         'charset' => 'utf8mb4',
     ],
-    // Browser origin allowed to call this API. '*' is fine for local dev and for
-    // a same-origin setup (Vercel rewrite / reverse proxy). For a DIRECT
-    // cross-origin call from Vercel, set CORS_ORIGIN to your exact frontend URL
-    // (e.g. https://your-app.vercel.app) — '*' is invalid once cookies are used.
-    'cors_allow_origin' => $env('CORS_ORIGIN', '*'),
+    // Browser origin(s) allowed to call this API. For a same-origin setup (Vite
+    // proxy in dev, Vercel rewrite in prod) CORS is moot. For a DIRECT
+    // cross-origin call from Vercel WITH the session cookie, the value must be an
+    // EXACT origin (never '*') — db.php echoes it back and adds
+    // Allow-Credentials: true. Comma-separate multiple origins; db.php reflects
+    // whichever one matches the incoming request. Override via CORS_ORIGIN env.
+    'cors_allow_origin' => $env('CORS_ORIGIN', 'https://time-deo-client.vercel.app'),
 
     // When '1', json_error() includes the raw exception message in `detail`.
     // Keep this OFF (unset / '0') in production so internals never leak.

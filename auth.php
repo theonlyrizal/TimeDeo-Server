@@ -20,12 +20,25 @@ function start_app_session(): void
         return;
     }
     session_name('TIMEDEO_SESSID');
+
+    // Is this request actually running over HTTPS? Behind a Cloudflare tunnel,
+    // TLS is terminated at the edge and PHP is reached over plain http, so we
+    // must also trust the X-Forwarded-Proto header the tunnel sets.
+    $isHttps = (
+        (($_SERVER['HTTPS'] ?? '') !== '' && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+        || ((string) ($_SERVER['SERVER_PORT'] ?? '') === '443')
+        || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
+    );
+
     session_set_cookie_params([
         'lifetime' => 0,        // a session cookie: clears when the browser closes
         'path'     => '/',
         'httponly' => true,     // JavaScript cannot read it (XSS mitigation)
-        'samesite' => 'Lax',    // correct for the same-origin proxy setup
-        // 'secure' left default: local dev is plain http on localhost
+        // Cross-site cookie (Vercel ↔ tunnel) needs SameSite=None; Secure over
+        // HTTPS. Local http proxy dev stays on Lax (Secure cookies aren't sent
+        // over http, which would silently break login on localhost).
+        'secure'   => $isHttps,
+        'samesite' => $isHttps ? 'None' : 'Lax',
     ]);
     session_start();
 }
