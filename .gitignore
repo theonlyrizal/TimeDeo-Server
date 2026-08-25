@@ -1,0 +1,21 @@
+# TimeDeo backend — keep the repo to pure PHP + SQL.
+# The files below are Docker / cloud-deployment scaffolding, not part of the
+# core API. Ignoring them keeps the tree focused on the endpoints + schema.
+
+# --- Docker ---
+Dockerfile
+.dockerignore
+docker-entrypoint.sh
+
+# --- Cloud deployment guides ---
+DEPLOY-AZURE.md
+DEPLOY-ORACLE.md
+DEPLOY-RAILWAY.md
+
+# --- Deployment-only variants / entrypoints ---
+init.prod.sql
+config.example.php
+index.php
+
+# --- Local runtime junk (nice to keep out anyway) ---
+*.log
