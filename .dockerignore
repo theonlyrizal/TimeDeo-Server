@@ -1,8 +1,0 @@
-# Keep the build context (and image) lean. The PHP endpoints are pulled in
-# explicitly by `COPY *.php` in the Dockerfile; nothing here is needed at runtime.
-.git
-.gitignore
-*.md
-*.sql
-.dockerignore
-Dockerfile
