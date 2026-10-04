@@ -9,10 +9,11 @@
  *   HAVING (not WHERE) is required because we're filtering on an aggregate.
  *
  * Optional: ?min=1        (HAVING threshold; default 1 -> "more than one listing")
- *           ?user_id=1    (adds that user's wallet + booking snapshot)
+ *           (signed in)   adds the session user's wallet + booking snapshot
  */
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/auth.php';
 require_method('GET');
 
 $pdo = Database::pdo();
@@ -23,15 +24,17 @@ try {
         SELECT
             (SELECT COUNT(*) FROM Users)                              AS total_users,
             (SELECT COUNT(*) FROM Listings WHERE status = "active")   AS active_listings,
+            (SELECT COUNT(DISTINCT skill_id) FROM Skills)            AS skill_types,
             (SELECT COUNT(*) FROM Bookings)                           AS total_bookings,
             (SELECT COALESCE(SUM(hours_transferred), 0) FROM Transactions) AS hours_transacted,
-            (SELECT ROUND(AVG(rating), 2) FROM Reviews)              AS platform_avg_rating
+            (SELECT ROUND(AVG(rating), 2) FROM Reviews)               AS platform_avg_rating
     ')->fetch();
 
     // Cast to numbers for a clean JSON shape.
     $totals = [
         'total_users'         => (int)   $totals['total_users'],
         'active_listings'     => (int)   $totals['active_listings'],
+        'skill_types'         => (int)   $totals['skill_types'],
         'total_bookings'      => (int)   $totals['total_bookings'],
         'hours_transacted'    => (float) $totals['hours_transacted'],
         'platform_avg_rating' => $totals['platform_avg_rating'] === null ? null : (float) $totals['platform_avg_rating'],
@@ -70,8 +73,9 @@ try {
 
     /* ---- Optional per-user snapshot (wallet + booking counts) ---- */
     $user = null;
-    if (isset($_GET['user_id']) && $_GET['user_id'] !== '') {
-        $uid = (int) $_GET['user_id'];
+    // Private numbers come from the SESSION user only (never a ?user_id param).
+    $uid = current_user_id();
+    if ($uid !== null) {
 
         $w = $pdo->prepare('SELECT available_balance, escrow_balance FROM Wallets WHERE user_id = :uid');
         $w->execute([':uid' => $uid]);
@@ -81,8 +85,8 @@ try {
             // Active bookings on each side, plus lifetime hours earned/spent.
             $b = $pdo->prepare('
                 SELECT
-                    SUM(CASE WHEN requester_id = :u1 AND booking_status IN ("pending","in_progress") THEN 1 ELSE 0 END) AS active_as_requester,
-                    SUM(CASE WHEN provider_id  = :u2 AND booking_status IN ("pending","in_progress") THEN 1 ELSE 0 END) AS active_as_provider
+                    SUM(CASE WHEN requester_id = :u1 AND booking_status IN ("pending","in_progress","delivered") THEN 1 ELSE 0 END) AS active_as_requester,
+                    SUM(CASE WHEN provider_id  = :u2 AND booking_status IN ("pending","in_progress","delivered") THEN 1 ELSE 0 END) AS active_as_provider
                 FROM Bookings
                 WHERE requester_id = :u3 OR provider_id = :u4
             ');

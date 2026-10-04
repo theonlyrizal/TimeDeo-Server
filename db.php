@@ -22,6 +22,9 @@ declare(strict_types=1);
  * ------------------------------------------------------------------------- */
 $__config = require __DIR__ . '/config.php';
 
+// PHP's clock agrees with the DB session (UTC) so date math never drifts.
+date_default_timezone_set('UTC');
+
 // A credentialed cross-origin request (fetch with credentials:'include') MUST be
 // answered with an exact origin — never '*' — plus Allow-Credentials: true, or
 // the browser discards the response. We reflect the caller's Origin when it's in
@@ -75,6 +78,9 @@ final class Database
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     // Use REAL server-side prepared statements (true anti-injection).
                     PDO::ATTR_EMULATE_PREPARES   => false,
+                    // Every DATETIME is stored and compared in UTC, whatever the
+                    // server's own time zone is (see iso_dt() / parse_client_dt()).
+                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'",
                 ]);
             } catch (PDOException $e) {
                 // Never leak connection internals to the client.
@@ -159,4 +165,56 @@ function require_method($allowed): void
     if (!in_array($method, $allowed, true)) {
         json_error('Method not allowed. Use: ' . implode(', ', $allowed), 405);
     }
+}
+
+/* ---------------------------------------------------------------------------
+ * Value helpers (dates, text).
+ * ------------------------------------------------------------------------- */
+
+/**
+ * DB DATETIME (UTC, "Y-m-d H:i:s") -> ISO-8601 with an explicit Z, so browsers
+ * parse it as UTC instead of guessing a local time. NULL stays NULL.
+ */
+function iso_dt(?string $dbValue): ?string
+{
+    if ($dbValue === null || $dbValue === '') {
+        return null;
+    }
+    return str_replace(' ', 'T', $dbValue) . 'Z';
+}
+
+/**
+ * Client ISO-8601 string (any offset) -> UTC "Y-m-d H:i:s" for a DATETIME
+ * column. Returns null when the value does not parse.
+ */
+function parse_client_dt($value): ?string
+{
+    if (!is_string($value) || trim($value) === '') {
+        return null;
+    }
+    try {
+        $dt = new DateTimeImmutable($value);
+    } catch (Exception $e) {
+        return null;
+    }
+    return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+}
+
+/**
+ * Trim a free-text field and enforce a maximum length. Empty -> null.
+ * Sends a 400 (and stops) when the text is too long.
+ */
+function clean_text($value, int $maxLen, string $label): ?string
+{
+    if ($value === null) {
+        return null;
+    }
+    $text = trim((string) $value);
+    if ($text === '') {
+        return null;
+    }
+    if (mb_strlen($text) > $maxLen) {
+        json_error("$label must be at most $maxLen characters.", 400);
+    }
+    return $text;
 }

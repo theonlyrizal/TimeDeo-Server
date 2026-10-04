@@ -56,7 +56,25 @@ function login_user(int $userId): void
 function current_user_id(): ?int
 {
     start_app_session();
-    return isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+    $uid = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+    // Read-only from here on: release the session file lock so the SPA's
+    // parallel requests (Promise.all) are not serialized behind each other.
+    session_write_close();
+    return $uid;
+}
+
+/**
+ * The logged-in user's id, or a 401 (and stop) if nobody is signed in.
+ * Every endpoint that reads private data or changes anything uses THIS id —
+ * never a user id sent by the client.
+ */
+function require_login(): int
+{
+    $uid = current_user_id();
+    if ($uid === null) {
+        json_error('Please sign in to continue.', 401);
+    }
+    return $uid;
 }
 
 /** Tear the session down completely (used by logout.php). */

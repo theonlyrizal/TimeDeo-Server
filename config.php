@@ -38,7 +38,8 @@ return [
     // EXACT origin (never '*') — db.php echoes it back and adds
     // Allow-Credentials: true. Comma-separate multiple origins; db.php reflects
     // whichever one matches the incoming request. Override via CORS_ORIGIN env.
-    'cors_allow_origin' => $env('CORS_ORIGIN', 'https://time-deo-client.vercel.app'),
+    
+'cors_allow_origin' => $env('CORS_ORIGIN', 'http://localhost:5173,http://localhost:5174'),
 
     // When '1', json_error() includes the raw exception message in `detail`.
     // Keep this OFF (unset / '0') in production so internals never leak.

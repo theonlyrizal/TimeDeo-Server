@@ -4,11 +4,13 @@
  *
  * The SPA calls this on load: if a valid session cookie is present it returns
  * the fresh user + wallet (same shape as login.php); otherwise 401 so the app
- * knows to show the login screen. Balances are re-read live, not cached.
+ * knows to show the login screen. Balances are re-read live, not cached — and
+ * any delivery left unanswered past the auto-release window is paid out first.
  */
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/booking_lib.php';
 require_method('GET');
 
 $uid = current_user_id();
@@ -17,6 +19,7 @@ if ($uid === null) {
 }
 
 $pdo = Database::pdo();
+settle_due_bookings($pdo);
 
 $stmt = $pdo->prepare(
     'SELECT u.user_id, u.full_name, u.email, u.join_date,
