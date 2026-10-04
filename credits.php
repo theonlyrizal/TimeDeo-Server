@@ -2,7 +2,10 @@
 /**
  * credits.php  —  buy time credits (DEMO bKash checkout — no real money moves).
  *
- *   GET  credits.php        -> { packages: [...], purchases: [... my last 20] }
+ *   GET  credits.php        -> { packages, purchases (one page, newest first),
+ *                                summary (count / total credits / total ৳), pagination }
+ *        ?page=1&per_page=10   (per_page max 50)
+ *        Purchases are always the SESSION user's own — never anyone else's.
  *   POST credits.php        -> buy a package
  *        body: { "package_id": 2, "payer_account": "01712345678" }
  *
@@ -32,20 +35,63 @@ try {
         ], $pdo->query('SELECT package_id, label, credits, price_bdt FROM Credit_Packages
                          WHERE is_active = 1 ORDER BY credits')->fetchAll());
 
-        $q = $pdo->prepare('SELECT purchase_id, credits, amount_bdt, method, payer_account, trx_id, created_at
-                              FROM Credit_Purchases WHERE user_id = :uid ORDER BY created_at DESC LIMIT 20');
-        $q->execute([':uid' => $uid]);
+        // Only ever the SESSION user's purchases — there is no user_id parameter.
+        $perPage = min(50, max(1, (int) ($_GET['per_page'] ?? 10)));
+        $page    = max(1, (int) ($_GET['page'] ?? 1));
+
+        // Aggregate summary (COUNT / SUM / MIN / MAX) over all of my purchases.
+        $s = $pdo->prepare('SELECT COUNT(*) AS purchase_count,
+                                   COALESCE(SUM(credits), 0)    AS total_credits,
+                                   COALESCE(SUM(amount_bdt), 0) AS total_bdt,
+                                   MIN(created_at) AS first_at,
+                                   MAX(created_at) AS last_at
+                              FROM Credit_Purchases WHERE user_id = :uid');
+        $s->execute([':uid' => $uid]);
+        $sum   = $s->fetch();
+        $total = (int) $sum['purchase_count'];
+
+        // One page, newest first, with the package it was bought from (JOIN).
+        $q = $pdo->prepare('SELECT cp.purchase_id, cp.credits, cp.amount_bdt, cp.method, cp.payer_account,
+                                   cp.trx_id, cp.created_at, pk.label AS package_label
+                              FROM Credit_Purchases cp
+                              INNER JOIN Credit_Packages pk ON pk.package_id = cp.package_id
+                             WHERE cp.user_id = :uid
+                             ORDER BY cp.created_at DESC, cp.purchase_id DESC
+                             LIMIT :lim OFFSET :off');
+        $q->bindValue(':uid', $uid, PDO::PARAM_INT);
+        $q->bindValue(':lim', $perPage, PDO::PARAM_INT);
+        $q->bindValue(':off', ($page - 1) * $perPage, PDO::PARAM_INT);
+        $q->execute();
         $purchases = array_map(static fn (array $p): array => [
             'purchase_id'   => (int) $p['purchase_id'],
+            'package_label' => $p['package_label'],
             'credits'       => (float) $p['credits'],
             'amount_bdt'    => (float) $p['amount_bdt'],
             'method'        => $p['method'],
-            'payer_account' => $p['payer_account'],
+            'payer_account' => $p['payer_account'],   // stored masked, e.g. 017******78
             'trx_id'        => $p['trx_id'],
             'created_at'    => iso_dt($p['created_at']),
         ], $q->fetchAll());
 
-        json_ok(['packages' => $packages, 'purchases' => $purchases]);
+        // Private financial data: never let a browser or proxy cache it.
+        header('Cache-Control: no-store, private');
+        json_ok([
+            'packages'   => $packages,
+            'purchases'  => $purchases,
+            'summary'    => [
+                'purchase_count' => $total,
+                'total_credits'  => (float) $sum['total_credits'],
+                'total_bdt'      => (float) $sum['total_bdt'],
+                'first_at'       => iso_dt($sum['first_at']),
+                'last_at'        => iso_dt($sum['last_at']),
+            ],
+            'pagination' => [
+                'page'        => $page,
+                'per_page'    => $perPage,
+                'total'       => $total,
+                'total_pages' => max(1, (int) ceil($total / $perPage)),
+            ],
+        ]);
     }
 
     if ($method !== 'POST') {

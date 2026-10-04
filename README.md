@@ -127,7 +127,7 @@ user** — no endpoint trusts a user id sent by the client.
 | POST | `create_review.php` | `{booking_id, rating, comment?}` |
 | GET/POST | `help_offers.php` | GET `?listing_id=` or `?mine=1`; POST `{listing_id, proposed_at, message?}` or `{offer_id, action: accept\|decline\|withdraw}` |
 | GET/POST | `contacts.php` | GET `?user_id=` or `?inbox=1`; POST `{listing_id}` (reveal) |
-| GET/POST | `credits.php` | GET packages + my purchases; POST `{package_id, payer_account}` |
+| GET/POST | `credits.php` | GET `?page=&per_page=` → packages + **my** purchases (paged, `no-store`) + summary; POST `{package_id, payer_account}` |
 | GET | `get_categories.php`, `get_dashboard_stats.php`, `get_top_providers.php`, `get_active_listings.php` | public read-only |
 
 ---
